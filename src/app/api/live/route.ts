@@ -1,32 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { groupLatestOddsByEventId } from "@/lib/odds-snapshot-utils";
-import type { SettlementPayload } from "@/lib/odds-settlement";
+import { settlementFromJson } from "@/lib/settlement-api";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-function settlementSummary(
-  raw: string | null | undefined,
-): {
-  snapshotCapturedAt: string | null;
-  parsedCount: number;
-  unparsedCount: number;
-  totalLines: number;
-} | null {
-  if (!raw) return null;
-  try {
-    const j = JSON.parse(raw) as SettlementPayload;
-    if (!j.lines) return null;
-    return {
-      snapshotCapturedAt: j.snapshotCapturedAt ?? null,
-      parsedCount: j.parsedCount ?? 0,
-      unparsedCount: j.unparsedCount ?? 0,
-      totalLines: j.lines.length,
-    };
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(req: NextRequest) {
   const now = new Date();
@@ -65,7 +42,7 @@ export async function GET(req: NextRequest) {
           "en",
         ),
       );
-      const sum = settlementSummary(e.result?.settlementJson);
+      const settlement = settlementFromJson(e.result?.settlementJson);
       const row: Record<string, unknown> = {
         id: e.id,
         superbetEventId: e.superbetEventId,
@@ -79,7 +56,7 @@ export async function GET(req: NextRequest) {
         hasResult: !!e.result,
         hasListingPayload: Boolean(e.listingPayloadJson),
         hasSubscriptionPayload: Boolean(e.subscriptionPayloadJson),
-        settlement: sum,
+        settlement,
         odds: ordered.map((o) => ({
           marketName: o.marketName,
           outcomeName: o.outcomeName,

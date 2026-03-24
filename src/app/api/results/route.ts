@@ -1,26 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
-import type { SettlementPayload } from "@/lib/odds-settlement";
+import { settlementFromJson } from "@/lib/settlement-api";
 import { NextRequest, NextResponse } from "next/server";
-
-function settlementBrief(raw: string | null): {
-  parsedCount: number;
-  unparsedCount: number;
-  totalLines: number;
-} | null {
-  if (!raw) return null;
-  try {
-    const j = JSON.parse(raw) as SettlementPayload;
-    if (!j.lines) return null;
-    return {
-      parsedCount: j.parsedCount,
-      unparsedCount: j.unparsedCount,
-      totalLines: j.lines.length,
-    };
-  } catch {
-    return null;
-  }
-}
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +57,7 @@ export async function GET(req: NextRequest) {
       awayScore: r.awayScore,
       status: r.event.status,
       finishedAt: r.finishedAt.toISOString(),
-      settlement: settlementBrief(r.settlementJson),
+      settlement: settlementFromJson(r.settlementJson),
     })),
   });
 }

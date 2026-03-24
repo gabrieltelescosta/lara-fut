@@ -1,8 +1,10 @@
 "use client";
 
 import { PageShell } from "@/components/PageShell";
+import { SettlementBreakdown } from "@/components/SettlementBreakdown";
+import type { SettlementForClient } from "@/lib/settlement-api";
 import { ui } from "@/lib/page-ui";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 
 type Row = {
   resultId: string;
@@ -15,11 +17,7 @@ type Row = {
   awayScore: number;
   status: string;
   finishedAt: string;
-  settlement?: {
-    parsedCount: number;
-    unparsedCount: number;
-    totalLines: number;
-  } | null;
+  settlement?: SettlementForClient | null;
 };
 
 export default function HistoryPage() {
@@ -31,6 +29,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [tournamentId, setTournamentId] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,7 +60,7 @@ export default function HistoryPage() {
   return (
     <PageShell
       title="Histórico"
-      description="Resultados finais com resumo de liquidação automática (linhas de odds reconhecidas vs placar)."
+      description="Resultados finais com liquidação por linha (verde = bateu, vermelho = não, cinza = parser não cobre). Clica em «Liquidação» para expandir."
     >
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <label className={ui.label}>
@@ -90,55 +89,78 @@ export default function HistoryPage() {
             Total: {total} · Página {page} de {Math.max(1, totalPages)}
           </p>
           <div className={ui.tablePanel}>
-            <table className={`${ui.table} min-w-[800px]`}>
+            <table className={`${ui.table} min-w-[880px]`}>
               <thead className={ui.thead}>
                 <tr>
                   <th className={ui.th}>Final</th>
                   <th className={ui.th}>Partida</th>
                   <th className={ui.th}>Placar</th>
-                  <th
-                    className={ui.th}
-                    title="Linhas de odds com resultado calculado vs não reconhecidas / total"
-                  >
-                    Liquidação
-                  </th>
+                  <th className={ui.th}>Liquidação</th>
                   <th className={ui.th}>Torneio</th>
                 </tr>
               </thead>
               <tbody className={ui.tbody}>
-                {rows.map((e) => (
-                  <tr key={e.resultId} className="hover:bg-zinc-800/40">
-                    <td className={ui.tdMuted}>
-                      {new Date(e.finishedAt).toLocaleString("pt-BR")}
-                    </td>
-                    <td className={ui.tdStrong}>{e.matchName}</td>
-                    <td className="px-3 py-2 font-mono text-zinc-100">
-                      {e.homeScore} – {e.awayScore}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs text-zinc-400">
-                      {e.settlement && e.settlement.totalLines > 0 ? (
-                        <>
-                          <span className="text-emerald-400/90">
-                            {e.settlement.parsedCount}
-                          </span>
-                          <span className="text-zinc-600"> + </span>
-                          <span className="text-zinc-500">
-                            {e.settlement.unparsedCount}
-                          </span>
-                          <span className="text-zinc-600"> ? / </span>
-                          <span className="text-zinc-300">
-                            {e.settlement.totalLines}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-zinc-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-500">
-                      {e.tournamentId ?? "—"}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((e, i) => {
+                  const open = expandedId === e.resultId;
+                  return (
+                    <Fragment key={e.resultId}>
+                      <tr
+                        className={
+                          i % 2 === 1
+                            ? "bg-zinc-900/40 hover:bg-zinc-800/40"
+                            : "hover:bg-zinc-800/40"
+                        }
+                      >
+                        <td className={ui.tdMuted}>
+                          {new Date(e.finishedAt).toLocaleString("pt-BR")}
+                        </td>
+                        <td className={ui.tdStrong}>{e.matchName}</td>
+                        <td className="px-3 py-2 font-mono text-zinc-100">
+                          {e.homeScore} – {e.awayScore}
+                        </td>
+                        <td className="px-3 py-2 align-top text-xs text-zinc-400">
+                          {e.settlement && e.settlement.totalLines > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedId((id) =>
+                                  id === e.resultId ? null : e.resultId,
+                                )
+                              }
+                              className="text-left text-sky-400 underline decoration-sky-400/40 underline-offset-2 hover:text-sky-300"
+                            >
+                              <SettlementBreakdown
+                                settlement={e.settlement}
+                                compactSummary
+                              />
+                              <span className="ml-1 font-mono text-zinc-500">
+                                {open ? "▲" : "▼"}
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-zinc-500">
+                          {e.tournamentId ?? "—"}
+                        </td>
+                      </tr>
+                      {open &&
+                        e.settlement &&
+                        e.settlement.lines.length > 0 && (
+                          <tr
+                            className={
+                              i % 2 === 1 ? "bg-zinc-900/40" : "bg-zinc-900/20"
+                            }
+                          >
+                            <td colSpan={5} className="px-3 py-4">
+                              <SettlementBreakdown settlement={e.settlement} />
+                            </td>
+                          </tr>
+                        )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
             {rows.length === 0 && (

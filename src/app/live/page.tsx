@@ -1,6 +1,8 @@
 "use client";
 
 import { PageShell } from "@/components/PageShell";
+import { SettlementBreakdown } from "@/components/SettlementBreakdown";
+import type { SettlementForClient } from "@/lib/settlement-api";
 import { ui } from "@/lib/page-ui";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -25,12 +27,7 @@ type Row = {
   hasResult: boolean;
   hasListingPayload?: boolean;
   hasSubscriptionPayload?: boolean;
-  settlement?: {
-    snapshotCapturedAt: string | null;
-    parsedCount: number;
-    unparsedCount: number;
-    totalLines: number;
-  } | null;
+  settlement?: SettlementForClient | null;
   oddsCount?: number;
   odds?: OddLine[];
 };
@@ -88,8 +85,11 @@ export default function LivePage() {
         <strong className="text-zinc-200">listagem + odds + subscrição</strong>{" "}
         no SQLite. Expande <strong className="text-zinc-200">Mercados</strong>{" "}
         para ver todas as linhas e cotações. Quando o jogo fecha, o sistema
-        gera <strong className="text-zinc-200">liquidação</strong> (acerto/erro
-        por linha onde o parser reconhece o mercado).
+        gera <strong className="text-zinc-200">liquidação</strong>: na coluna vês{" "}
+        <span className="text-emerald-400/90">✓</span> bateu /{" "}
+        <span className="text-red-300/80">✗</span> não bateu /{" "}
+        <span className="text-zinc-500">?</span> sem parser. Expande o jogo para
+        a lista completa por mercado.
       </>
     ),
     [],
@@ -178,24 +178,12 @@ export default function LivePage() {
                         {!e.hasResult ? (
                           <span className="text-zinc-600">—</span>
                         ) : e.settlement && e.settlement.totalLines > 0 ? (
-                          <span
-                            title="Linhas analisadas vs placar (heurística). Ver detalhe em GET /api/live?full=1 → settlementJson no histórico."
-                            className="leading-relaxed"
-                          >
-                            <span className="font-mono text-emerald-400/90">
-                              {e.settlement.parsedCount}
-                            </span>
-                            <span className="text-zinc-600"> ok + </span>
-                            <span className="font-mono text-zinc-500">
-                              {e.settlement.unparsedCount}
-                            </span>
-                            <span className="text-zinc-600"> ? / </span>
-                            <span className="font-mono text-zinc-300">
-                              {e.settlement.totalLines}
-                            </span>
-                          </span>
+                          <SettlementBreakdown
+                            settlement={e.settlement}
+                            compactSummary
+                          />
                         ) : (
-                          <span className="text-zinc-600">sem odds</span>
+                          <span className="text-zinc-600">sem liquidação</span>
                         )}
                       </td>
                       <td className="px-3 py-2 align-top">
@@ -230,7 +218,13 @@ export default function LivePage() {
                         }
                       >
                         <td colSpan={colCount} className="px-3 py-4">
-                          <div className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 p-3">
+                          <div className="space-y-4">
+                            {e.hasResult &&
+                              e.settlement &&
+                              e.settlement.lines.length > 0 && (
+                                <SettlementBreakdown settlement={e.settlement} />
+                              )}
+                            <div className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 p-3">
                             <p className="mb-3 text-xs text-zinc-500">
                               Último lote de cotações. Payload bruto da oferta:{" "}
                               <code className="text-zinc-400">
@@ -277,6 +271,7 @@ export default function LivePage() {
                                   </div>
                                 ))}
                             </div>
+                          </div>
                           </div>
                         </td>
                       </tr>
