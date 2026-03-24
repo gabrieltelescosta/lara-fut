@@ -1,0 +1,119 @@
+// Superbet Virtual Sports - local SQLite store
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Tournament {
+  id         Int     @id
+  name       String?
+  sportId    Int
+  categoryId Int
+  events     Event[]
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  superbetEventId Int      @unique
+  tournamentId    Int?
+  tournament      Tournament? @relation(fields: [tournamentId], references: [id])
+  matchName       String
+  matchDate       DateTime
+  status          String   @default("unknown")
+  homeScore       Int?
+  awayScore       Int?
+  periodScores    Json?
+  finishedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  /// Último JSON completo do item `events/by-date` (oferta + odds como vieram).
+  listingPayloadJson String?
+  /// Último JSON do payload SSE de subscrição (placar, estado, mercados em jogo se existirem).
+  subscriptionPayloadJson String?
+  oddsSnapshots   OddsSnapshot[]
+  result          Result?
+}
+
+model Result {
+  id           String   @id @default(cuid())
+  eventId      String   @unique
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  homeScore    Int
+  awayScore    Int
+  periodScores Json?
+  finishedAt   DateTime
+  /// Liquidação heurística: cada linha de odds do lote escolhido vs placar final.
+  settlementJson String?
+}
+
+model OddsSnapshot {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  marketName  String
+  outcomeName String
+  price       Float
+  /// Texto extra da API (ex. linha, handicap), quando existir.
+  info        String?
+  capturedAt  DateTime @default(now())
+  /// SHA-256 hex do payload normalizado de odds (dedupe entre coletas).
+  contentHash String   @default("")
+  /// Mesmo valor para todas as linhas de uma captura (histórico por lote).
+  snapshotBatch String @default("")
+
+  @@index([eventId, capturedAt])
+  @@index([eventId, contentHash])
+}
+
+/// Sinal gerado antes do jogo; resolvido quando há resultado no banco.
+model SignalPrediction {
+  id              String    @id @default(cuid())
+  superbetEventId Int       @unique
+  matchName       String
+  matchDate       DateTime
+  homeTeam        String
+  awayTeam        String
+  /// Time usado no mercado "total de gols da equipe" (sempre o mandante).
+  focusTeam       String
+  message         String
+  picksJson       String
+  createdAt       DateTime  @default(now())
+  resolvedAt      DateTime?
+  homeScore       Int?
+  awayScore       Int?
+  hitOneX2        Boolean?
+  hitBtts         Boolean?
+  hitTeamOu       Boolean?
+  hitsTotal       Int?
+  /// JSON: acertos por id de mercado (`{ "oneX2": true, ... }`); preferir quando presente.
+  gradesJson      String?
+  /// Odds completas da última captura no instante da criação do sinal (auditável).
+  oddsAtSignalJson String?
+}
+
+/// Último resultado do simulador de estratégias (atualizado pelo coletor).
+model StrategySimRun {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  summaryJson String
+}
+
+/// Estado singleton para Telegram: mesma mensagem editada + cadeia de gale (id fixo = 1).
+model TelegramGaleState {
+  id        Int      @id @default(1)
+  messageId Int?
+  /// Legado; não usar na lógica nova.
+  galeLevel Int      @default(0)
+  /// Tentativa atual na cadeia (1..maxAttempts); 0 = sem cadeia ativa.
+  currentAttempt Int @default(0)
+  /// Total de entradas permitidas (1 entrada + N gales). Ex.: 4 = 1 + 3 gales.
+  maxAttempts    Int @default(4)
+  /// Após RED parcial: próximo sinal deve editar a mesma mensagem.
+  pendingEditNext Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
