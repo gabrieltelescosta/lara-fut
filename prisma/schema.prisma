@@ -115,6 +115,12 @@ model TelegramGaleState {
   maxAttempts    Int @default(4)
   /// Após RED parcial: próximo sinal deve editar a mesma mensagem.
   pendingEditNext Boolean @default(false)
+  /// Prejuízo acumulado na cadeia atual (soma dos stakes perdidos).
+  accumulatedLoss Float  @default(0)
+  /// Odd do primeiro sinal da cadeia (usada para calcular lucro desejado).
+  initialOdd      Float?
+  /// Stake base configurado no início da cadeia.
+  baseStake       Float  @default(10)
   updatedAt DateTime @updatedAt
 }
 

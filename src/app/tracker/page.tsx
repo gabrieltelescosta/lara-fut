@@ -125,6 +125,7 @@ export default function TrackerPage() {
     const rounds = resolved.map((r) => ({
       hitsTotal: r.hitsTotal ?? 0,
       picksCount: r.picksCount ?? 0,
+      oddPerRound: r.oddsTeamOuAtSignal ?? null,
     }));
     const results = simulateGaleBankroll(rounds, galeConfig);
     return { resolved, results };
@@ -480,7 +481,7 @@ export default function TrackerPage() {
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-400">
-                Odd fixa (simulação)
+                Odd fallback
                 <input
                   type="number"
                   min={1.01}
@@ -493,6 +494,7 @@ export default function TrackerPage() {
                     }))
                   }
                   className="w-24 rounded border border-zinc-600 bg-zinc-950 px-2 py-1.5 font-mono text-zinc-100"
+                  title="Usada quando o sinal não tem odd gravada"
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-400">
@@ -594,6 +596,9 @@ export default function TrackerPage() {
                         Gale
                       </th>
                       <th className="px-2 py-2">Stake</th>
+                      <th className="px-2 py-2" title="Odd usada (real do sinal ou fallback)">
+                        Odd
+                      </th>
                       <th
                         className="px-2 py-2"
                         title="Vitória ou derrota da rodada segundo a regra de green"
@@ -633,6 +638,9 @@ export default function TrackerPage() {
                           </td>
                           <td className="px-2 py-1.5 font-mono">
                             {sim.stake.toFixed(2)}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono text-zinc-500">
+                            {sim.oddUsed.toFixed(2)}
                           </td>
                           <td className="px-2 py-1.5">
                             {sim.green ? (

@@ -1,6 +1,8 @@
 /**
- * Simulação educativa de banca com gales entre sinais (rodadas).
- * Não reflete odds reais nem liquidez — só matemática hipotética.
+ * Simulação de banca com gales (martingale clássico baseado em odds).
+ * Quando a odd real do sinal está disponível, calcula o stake para
+ * recuperar o prejuízo acumulado + lucro desejado. Caso contrário
+ * usa `fixedOdd` como fallback.
  */
 
 /** Pelo menos um acerto vs todos os mercados do sinal. */
@@ -8,11 +10,12 @@ export type GaleGreenRule = "anyHit" | "allHits";
 
 export type GaleSimConfig = {
   baseStake: number;
+  /** Legado / fallback: usado só quando não há odd real. */
   multiplier: number;
-  /** Nível máximo de gale (ex.: 3 → níveis 0…3, stake base×mult^n). */
+  /** Nível máximo de gale (ex.: 3 → níveis 0…3). */
   maxGales: number;
   greenRule: GaleGreenRule;
-  /** Odd decimal fixa só para simular retorno em green (ex. 1.90). */
+  /** Odd decimal fallback (usada quando a rodada não tem odd gravada). */
   fixedOdd: number;
   /** Banca antes da primeira rodada. */
   startingBankroll: number;
@@ -31,6 +34,8 @@ export type RoundInput = {
   hitsTotal: number;
   /** Quantos mercados tinha o sinal (para regra allHits). */
   picksCount: number;
+  /** Odd real do sinal (teamOu); null/undefined = usar fixedOdd. */
+  oddPerRound?: number | null;
 };
 
 export type GaleRoundResult = {
@@ -40,6 +45,8 @@ export type GaleRoundResult = {
   galeLevel: number;
   stake: number;
   green: boolean;
+  /** Odd usada nesta rodada (real ou fallback). */
+  oddUsed: number;
   /** Lucro líquido da rodada (negativo em red). */
   netPl: number;
   bancaDepois: number;
@@ -50,7 +57,7 @@ export type GaleRoundResult = {
 };
 
 /**
- * Green: `anyHit` = hitsTotal ≥ 1; `allHits` = hitsTotal === picksCount.
+ * Green: `anyHit` = hitsTotal >= 1; `allHits` = hitsTotal === picksCount.
  */
 export function computeRoundGreen(
   hitsTotal: number,
@@ -60,15 +67,6 @@ export function computeRoundGreen(
   if (picksCount <= 0) return false;
   if (rule === "anyHit") return hitsTotal >= 1;
   return hitsTotal === picksCount;
-}
-
-function stakeForLevel(
-  level: number,
-  baseStake: number,
-  multiplier: number,
-): number {
-  if (level <= 0) return baseStake;
-  return baseStake * multiplier ** level;
 }
 
 /**
@@ -84,54 +82,83 @@ export function nextLevelAfterRed(
   return { level: 0, forcedReset: true };
 }
 
-/**
- * P/L por rodada: RED = −stake; GREEN = stake × (odd − 1) (uma aposta combinada hipotética).
- */
-export function netPlForRound(
-  green: boolean,
-  stake: number,
+function resolveOdd(
+  roundOdd: number | null | undefined,
   fixedOdd: number,
 ): number {
-  if (!green) return -stake;
-  if (fixedOdd <= 1) return 0;
-  return stake * (fixedOdd - 1);
+  if (
+    typeof roundOdd === "number" &&
+    Number.isFinite(roundOdd) &&
+    roundOdd > 1
+  ) {
+    return roundOdd;
+  }
+  return fixedOdd;
 }
 
 /**
- * Simula sequência de rodadas **na ordem do array** (deve ser cronológica: mais antigo → mais recente).
+ * Calcula o stake para recuperar prejuízo acumulado + lucro desejado.
+ * `desiredProfit` = baseStake * (oddInicial - 1).
+ * `stake = (accLoss + desiredProfit) / (currentOdd - 1)`.
+ */
+export function recoveryStake(
+  accumulatedLoss: number,
+  desiredProfit: number,
+  currentOdd: number,
+): number {
+  const denom = currentOdd - 1;
+  if (denom <= 0) return 0;
+  return (accumulatedLoss + desiredProfit) / denom;
+}
+
+/**
+ * Simula sequência de rodadas (cronológica: mais antigo -> mais recente).
+ * Usa martingale clássico baseado em odds quando disponível.
  */
 export function simulateGaleBankroll(
   rounds: RoundInput[],
   config: GaleSimConfig,
 ): GaleRoundResult[] {
-  const {
-    baseStake,
-    multiplier,
-    maxGales,
-    greenRule,
-    fixedOdd,
-    startingBankroll,
-  } = config;
+  const { baseStake, maxGales, greenRule, fixedOdd, startingBankroll } = config;
 
   const out: GaleRoundResult[] = [];
   let bankroll = startingBankroll;
   let level = 0;
+  let accLoss = 0;
+  let chainInitialOdd = fixedOdd;
 
   for (let i = 0; i < rounds.length; i++) {
-    const { hitsTotal, picksCount } = rounds[i];
+    const { hitsTotal, picksCount, oddPerRound } = rounds[i];
     const green = computeRoundGreen(hitsTotal, picksCount, greenRule);
-    const stake = stakeForLevel(level, baseStake, multiplier);
-    const net = netPlForRound(green, stake, fixedOdd);
+    const odd = resolveOdd(oddPerRound, fixedOdd);
+
+    let stake: number;
+    if (level === 0) {
+      stake = baseStake;
+      chainInitialOdd = odd;
+      accLoss = 0;
+    } else {
+      const desiredProfit = baseStake * (chainInitialOdd - 1);
+      stake = recoveryStake(accLoss, desiredProfit, odd);
+    }
+
+    stake = Math.max(0, stake);
+    const net = green ? stake * (odd - 1) : -stake;
     bankroll += net;
 
     let levelAfter: number;
     let forced = false;
     if (green) {
       levelAfter = 0;
+      accLoss = 0;
     } else {
+      accLoss += stake;
       const n = nextLevelAfterRed(level, maxGales);
       levelAfter = n.level;
       forced = n.forcedReset;
+      if (forced) {
+        accLoss = 0;
+      }
     }
 
     out.push({
@@ -139,6 +166,7 @@ export function simulateGaleBankroll(
       galeLevel: level,
       stake,
       green,
+      oddUsed: odd,
       netPl: net,
       bancaDepois: bankroll,
       nextLevel: levelAfter,

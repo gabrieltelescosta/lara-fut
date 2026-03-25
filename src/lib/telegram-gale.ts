@@ -17,6 +17,7 @@ import {
   type GradeResult,
   type StoredPicksJson,
 } from "@/lib/signal-picks";
+import { recoveryStake } from "@/lib/gale-simulation";
 import { getResolvedTelegramSettings } from "@/lib/telegram-settings";
 import {
   buildTelegramResolvedMessage,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/telegram";
 
 const STATE_ID = 1;
+const DEFAULT_BASE_STAKE = 10;
 
 export async function getTelegramGaleMaxRecoveries(): Promise<number> {
   const r = await getResolvedTelegramSettings();
@@ -55,6 +57,9 @@ async function saveState(data: {
   currentAttempt: number;
   maxAttempts: number;
   pendingEditNext: boolean;
+  accumulatedLoss: number;
+  initialOdd: number | null;
+  baseStake: number;
 }) {
   await prisma.telegramGaleState.update({
     where: { id: STATE_ID },
@@ -63,8 +68,28 @@ async function saveState(data: {
       currentAttempt: data.currentAttempt,
       maxAttempts: data.maxAttempts,
       pendingEditNext: data.pendingEditNext,
+      accumulatedLoss: data.accumulatedLoss,
+      initialOdd: data.initialOdd,
+      baseStake: data.baseStake,
     },
   });
+}
+
+function resetChainFields() {
+  return {
+    accumulatedLoss: 0,
+    initialOdd: null as number | null,
+    baseStake: DEFAULT_BASE_STAKE,
+  };
+}
+
+function primaryOddFromParams(
+  oddsByMarket: Partial<Record<ImplementedMarketId, number | null>> | undefined,
+): number | null {
+  if (!oddsByMarket) return null;
+  const v = oddsByMarket.teamOu;
+  if (typeof v === "number" && Number.isFinite(v) && v > 1) return v;
+  return null;
 }
 
 async function nextEventKickoffHint(
@@ -138,6 +163,17 @@ export async function notifyTelegramSignalCreated(params: {
     : Math.max(1, state.currentAttempt || 1);
   const attemptLabel = `Tentativa ${displayAttempt}/${state.maxAttempts} na cadeia`;
 
+  const currentOdd = primaryOddFromParams(params.oddsByMarket);
+
+  const isNewChain = !state.pendingEditNext || state.currentAttempt === 0;
+  let stakeHint: string | undefined;
+  if (!isNewChain && state.accumulatedLoss > 0 && currentOdd && currentOdd > 1) {
+    const initOdd = state.initialOdd ?? currentOdd;
+    const desiredProfit = state.baseStake * (initOdd - 1);
+    const suggested = recoveryStake(state.accumulatedLoss, desiredProfit, currentOdd);
+    stakeHint = `💰 Stake sugerido: ${suggested.toFixed(2)} (recuperar ${state.accumulatedLoss.toFixed(2)} + lucro)`;
+  }
+
   const body = buildTelegramSignalCard({
     homeTeam: params.homeTeam,
     awayTeam: params.awayTeam,
@@ -147,7 +183,7 @@ export async function notifyTelegramSignalCreated(params: {
     roundsUsed: params.roundsUsed,
     timeZone: settings.timezone,
     rankLine: params.rankLine,
-    attemptLabel,
+    attemptLabel: stakeHint ? `${attemptLabel}\n${stakeHint}` : attemptLabel,
     nextKickoffHint: nextHint,
     oddsByMarket: params.oddsByMarket,
   });
@@ -161,6 +197,9 @@ export async function notifyTelegramSignalCreated(params: {
         currentAttempt: state.currentAttempt + 1,
         maxAttempts: maxA,
         pendingEditNext: false,
+        accumulatedLoss: state.accumulatedLoss,
+        initialOdd: state.initialOdd,
+        baseStake: state.baseStake,
       });
       return;
     }
@@ -169,6 +208,9 @@ export async function notifyTelegramSignalCreated(params: {
       currentAttempt: state.currentAttempt + 1,
       maxAttempts: maxA,
       pendingEditNext: false,
+      accumulatedLoss: state.accumulatedLoss,
+      initialOdd: state.initialOdd,
+      baseStake: state.baseStake,
     });
     return;
   }
@@ -179,6 +221,9 @@ export async function notifyTelegramSignalCreated(params: {
     currentAttempt: 1,
     maxAttempts: maxA,
     pendingEditNext: false,
+    accumulatedLoss: 0,
+    initialOdd: currentOdd,
+    baseStake: DEFAULT_BASE_STAKE,
   });
 }
 
@@ -219,6 +264,18 @@ export async function notifyTelegramSignalResolved(params: {
   const maxA = state.maxAttempts;
   const msgId = state.messageId;
 
+  const currentStake = state.currentAttempt <= 1
+    ? state.baseStake
+    : (() => {
+        const initOdd = state.initialOdd ?? 1.9;
+        const desiredProfit = state.baseStake * (initOdd - 1);
+        return recoveryStake(
+          state.accumulatedLoss - state.baseStake,
+          desiredProfit,
+          initOdd,
+        );
+      })();
+
   if (hit === true) {
     const text = buildTelegramGaleFinalGreen({
       matchName: params.matchName,
@@ -237,12 +294,24 @@ export async function notifyTelegramSignalResolved(params: {
       currentAttempt: 0,
       maxAttempts: await getTelegramMaxAttemptsInChain(),
       pendingEditNext: false,
+      ...resetChainFields(),
     });
     return;
   }
 
   if (hit === false) {
+    const stakeThisRound = state.currentAttempt <= 1
+      ? state.baseStake
+      : (() => {
+          const initOdd = state.initialOdd ?? 1.9;
+          const desiredProfit = state.baseStake * (initOdd - 1);
+          const prevLoss = state.accumulatedLoss;
+          return recoveryStake(prevLoss, desiredProfit, initOdd);
+        })();
+
+    const newAccLoss = state.accumulatedLoss + stakeThisRound;
     const nextHint = await nextEventKickoffHint(new Date(), settings.timezone);
+
     if (state.currentAttempt >= maxA) {
       const text = buildTelegramGaleFinalRed({
         matchName: params.matchName,
@@ -250,6 +319,7 @@ export async function notifyTelegramSignalResolved(params: {
         awayScore: params.awayScore,
         marketLabel,
         attemptsUsed: state.currentAttempt,
+        totalLoss: newAccLoss,
       });
       if (msgId != null) {
         await editTelegramMessage(msgId, text);
@@ -261,9 +331,14 @@ export async function notifyTelegramSignalResolved(params: {
         currentAttempt: 0,
         maxAttempts: await getTelegramMaxAttemptsInChain(),
         pendingEditNext: false,
+        ...resetChainFields(),
       });
       return;
     }
+
+    const initOdd = state.initialOdd ?? 1.9;
+    const desiredProfit = state.baseStake * (initOdd - 1);
+    const suggestedNext = recoveryStake(newAccLoss, desiredProfit, initOdd);
 
     const text = buildTelegramGaleInterimRed({
       matchName: params.matchName,
@@ -273,6 +348,8 @@ export async function notifyTelegramSignalResolved(params: {
       galeStep: state.currentAttempt,
       maxAttempts: maxA,
       nextKickoffHint: nextHint,
+      suggestedStake: suggestedNext,
+      accumulatedLoss: newAccLoss,
     });
     let outMid = msgId;
     if (outMid != null) {
@@ -286,6 +363,9 @@ export async function notifyTelegramSignalResolved(params: {
       currentAttempt: state.currentAttempt,
       maxAttempts: maxA,
       pendingEditNext: true,
+      accumulatedLoss: newAccLoss,
+      initialOdd: state.initialOdd,
+      baseStake: state.baseStake,
     });
     return;
   }

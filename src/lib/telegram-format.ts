@@ -131,6 +131,8 @@ export function buildTelegramGaleInterimRed(params: {
   galeStep: number;
   maxAttempts: number;
   nextKickoffHint: string | null;
+  suggestedStake?: number | null;
+  accumulatedLoss?: number | null;
 }): string {
   const {
     matchName,
@@ -140,6 +142,8 @@ export function buildTelegramGaleInterimRed(params: {
     galeStep,
     maxAttempts,
     nextKickoffHint,
+    suggestedStake,
+    accumulatedLoss,
   } = params;
   const lines = [
     "🔴 RED (parcial)",
@@ -148,8 +152,16 @@ export function buildTelegramGaleInterimRed(params: {
     `📉 Mercado: ${marketLabel}`,
     "",
     `🔄 Gale ${galeStep} de ${maxAttempts - 1} recuperações possíveis`,
-    "⏳ Aguarda o próximo sinal na mesma mensagem (próximo jogo).",
   ];
+  if (typeof accumulatedLoss === "number" && accumulatedLoss > 0) {
+    lines.push(`💰 Prejuízo acumulado na cadeia: ${accumulatedLoss.toFixed(2)}`);
+  }
+  if (typeof suggestedStake === "number" && suggestedStake > 0) {
+    lines.push(
+      `📌 Stake sugerido próximo gale: ${suggestedStake.toFixed(2)} (para recuperar + lucro)`,
+    );
+  }
+  lines.push("⏳ Aguarda o próximo sinal na mesma mensagem (próximo jogo).");
   if (nextKickoffHint) {
     lines.push(`🔜 Próximo kickoff provável: ${nextKickoffHint}`);
   }
@@ -182,19 +194,24 @@ export function buildTelegramGaleFinalRed(params: {
   awayScore: number;
   marketLabel: string;
   attemptsUsed: number;
+  totalLoss?: number | null;
 }): string {
-  const { matchName, homeScore, awayScore, marketLabel, attemptsUsed } =
+  const { matchName, homeScore, awayScore, marketLabel, attemptsUsed, totalLoss } =
     params;
-  return [
+  const lines = [
     "⛔ RED final — ciclo encerrado",
     `⚽ ${matchName}`,
     `📍 Placar: ${homeScore}–${awayScore}`,
     `📉 Mercado: ${marketLabel}`,
     "",
     `💀 Derrota contabilizada após ${attemptsUsed} tentativa(s) (gales esgotados).`,
-    "",
-    "— Próximo sinal = nova mensagem.",
-  ].join("\n");
+  ];
+  if (typeof totalLoss === "number" && totalLoss > 0) {
+    lines.push(`💰 Prejuízo total da cadeia: ${totalLoss.toFixed(2)}`);
+  }
+  lines.push("");
+  lines.push("— Próximo sinal = nova mensagem.");
+  return lines.join("\n");
 }
 
 export function primaryMarketHit(
