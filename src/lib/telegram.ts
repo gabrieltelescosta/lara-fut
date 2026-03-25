@@ -5,7 +5,7 @@ import {
 import {
   getEnabledSignalMarkets,
   IMPLEMENTED_MARKET_IDS,
-  MARKET_SHORT_LABEL,
+  marketDisplayName,
   type ImplementedMarketId,
 } from "@/lib/signal-market-catalog";
 import type { GradeResult, StoredPicksJson } from "@/lib/signal-picks";
@@ -189,7 +189,7 @@ export function buildTelegramResolvedMessage(params: {
     const ok = grade.byMarket[id];
     if (ok === true) hitsTg += 1;
     const symbol = ok === true ? "✓" : ok === false ? "✗" : "—";
-    detail.push(`${MARKET_SHORT_LABEL[id]}: ${symbol}`);
+    detail.push(`${marketDisplayName(id)}: ${symbol}`);
   }
 
   if (telegramMarkets.length <= 1) {

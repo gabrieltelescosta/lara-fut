@@ -11,7 +11,7 @@ import {
 } from "@/lib/gale-simulation";
 import {
   IMPLEMENTED_MARKET_IDS,
-  MARKET_SHORT_LABEL,
+  marketDisplayName,
   type ImplementedMarketId,
 } from "@/lib/signal-market-catalog";
 import { MARKET_LINE_ORDER } from "@/lib/signal-picks";
@@ -732,7 +732,7 @@ export default function TrackerPage() {
                             title={id}
                           >
                             <span className="max-w-[72px] truncate">
-                              {MARKET_SHORT_LABEL[id]}
+                              {marketDisplayName(id)}
                             </span>
                             {icon(gradeForRow(r, id))}
                           </span>

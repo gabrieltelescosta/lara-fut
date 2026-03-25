@@ -14,7 +14,7 @@ const groupData: NavLink[] = [
 
 const groupSignals: NavLink[] = [
   { href: "/tracker", label: "Tracker" },
-  { href: "/strategy", label: "Estratégia" },
+  { href: "/strategy", label: "Simulação" },
 ];
 
 const groupExtra: NavLink[] = [{ href: "/stats", label: "Estatísticas" }];

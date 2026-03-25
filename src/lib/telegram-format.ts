@@ -1,4 +1,4 @@
-import { MARKET_SHORT_LABEL } from "@/lib/signal-market-catalog";
+import { marketDisplayName } from "@/lib/signal-market-catalog";
 import type { ImplementedMarketId } from "@/lib/signal-market-catalog";
 import type { GradeResult, StoredPicksJson } from "@/lib/signal-picks";
 import { getSignalMinLeadMinutes } from "@/lib/signal-timing";
@@ -101,7 +101,7 @@ export function buildTelegramSignalCard(params: {
   for (const id of telegramMarkets) {
     const line = pickLineForMarket(id, picks, homeTeam);
     if (line) {
-      lines.push(`  • ${MARKET_SHORT_LABEL[id]}: ${line}`);
+      lines.push(`  • ${marketDisplayName(id)}: ${line}`);
     }
   }
 

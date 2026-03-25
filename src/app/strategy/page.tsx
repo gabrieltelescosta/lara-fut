@@ -5,7 +5,7 @@ import { PageShell } from "@/components/PageShell";
 import { ui } from "@/lib/page-ui";
 import {
   IMPLEMENTED_MARKET_IDS,
-  MARKET_SHORT_LABEL,
+  marketDisplayName,
   type ImplementedMarketId,
 } from "@/lib/signal-market-catalog";
 import { useCallback, useEffect, useState, useTransition } from "react";
@@ -259,15 +259,15 @@ export default function StrategyPage() {
 
   return (
     <PageShell
-      title="Estratégia"
+      title="Simulação por mercado"
       description={
         <>
-          Backtest <strong className="text-zinc-200">walk-forward</strong>: em
-          cada jogo só entram resultados <em>anteriores</em> para montar o
-          sinal. Compara janelas de{" "}
-          <strong className="text-zinc-200">5, 10 e 15</strong> jogos do
-          mandante. O coletor grava o cache; aqui podes mudar mercados na vista
-          ou forçar recálculo.
+          Backtest <strong className="text-zinc-200">walk-forward</strong>: por{" "}
+          <strong className="text-zinc-200">mercado</strong> (nomes iguais à
+          oferta / sinal) vês a % de acerto; cada linha da tabela é só uma{" "}
+          <strong className="text-zinc-200">janela de histórico</strong> do
+          mandante (5, 10 ou 15 jogos anteriores). O coletor grava o cache; aqui
+          podes mudar mercados na vista ou forçar recálculo.
         </>
       }
       actions={
@@ -355,7 +355,7 @@ export default function StrategyPage() {
                     className="rounded border-zinc-500"
                   />
                   <span>
-                    {MARKET_SHORT_LABEL[id]}{" "}
+                    {marketDisplayName(id)}{" "}
                     <span className="font-mono text-zinc-500">({id})</span>
                   </span>
                 </label>
@@ -407,8 +407,8 @@ export default function StrategyPage() {
             {(bestByAvgHits || bestLabel) && (
               <div className="space-y-2 rounded-lg border border-emerald-900/40 bg-emerald-950/25 px-3 py-2 text-emerald-200/90">
                 <p>
-                  Melhor % de acertos (média dos mercados ativos,{" "}
-                  {marketsEnabled.length}):{" "}
+                  Melhor janela de histórico (média dos{" "}
+                  {marketsEnabled.length} mercados ativos):{" "}
                   <strong className="text-emerald-100">
                     {bestLabel ?? bestByAvgHits}
                   </strong>
@@ -421,7 +421,7 @@ export default function StrategyPage() {
                 </p>
                 {bestTied && bestTiedIds.length > 1 && (
                   <p className="text-xs text-emerald-300/80">
-                    Empate no mesmo % entre:{" "}
+                    Empate na mesma média entre:{" "}
                     {bestTiedIds
                       .map(
                         (id) =>
@@ -429,7 +429,7 @@ export default function StrategyPage() {
                           id,
                       )
                       .join(", ")}
-                    . Desempate para destaque: ordem fixa 5 → 10 → 15 jogos.
+                    . Desempate: prioridade 5j → 10j → 15j.
                   </p>
                 )}
               </div>
@@ -437,7 +437,7 @@ export default function StrategyPage() {
             {!loading && !err && strategies.length > 0 && (
               <div className="rounded-lg border border-zinc-600/60 bg-zinc-900/50 px-3 py-2 text-sm text-zinc-300">
                 <p className="text-xs font-medium text-zinc-500">
-                  Melhor janela (5 / 10 / 15) por mercado
+                  Melhor janela de histórico por mercado (nome = mesmo do sinal)
                 </p>
                 <ul className="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
                   {marketsEnabled.map((id) => {
@@ -445,7 +445,7 @@ export default function StrategyPage() {
                     return (
                       <li key={id} className="text-xs text-zinc-400">
                         <span className="text-zinc-500">
-                          {MARKET_SHORT_LABEL[id]}:
+                          {marketDisplayName(id)}:
                         </span>{" "}
                         {ref ? (
                           <>
@@ -474,16 +474,16 @@ export default function StrategyPage() {
               <thead className={ui.thead}>
                 <tr>
                   <th className="sticky left-0 z-10 bg-zinc-800/95 px-3 py-3 font-semibold text-zinc-200">
-                    Estratégia
+                    Janela (mandante)
                   </th>
                   <th className={ui.th}>Jogos</th>
                   {marketsEnabled.map((id) => (
                     <th
                       key={id}
-                      className="max-w-[120px] px-2 py-3 text-xs font-semibold leading-tight text-zinc-200"
-                      title={id}
+                      className="max-w-[9.5rem] px-2 py-3 text-left text-[10px] font-semibold leading-snug text-zinc-200 sm:text-[11px]"
+                      title={`${marketDisplayName(id)} · ${id}`}
                     >
-                      {MARKET_SHORT_LABEL[id]}
+                      {marketDisplayName(id)}
                     </th>
                   ))}
                   <th className={ui.th}>% total</th>
@@ -551,15 +551,16 @@ export default function StrategyPage() {
             <strong className="text-zinc-400">Quantos jogos entram?</strong> Até{" "}
             <strong className="text-zinc-400">8000</strong> resultados
             cronológicos. A coluna <strong className="text-zinc-400">Jogos</strong>{" "}
-            é quantas vezes deu para avaliar o sinal em walk-forward. Para gerar
-            pick são precisos pelo menos{" "}
+            é quantas vezes deu para avaliar o pick por mercado em walk-forward.
+            Para gerar sinal são precisos pelo menos{" "}
             <strong className="text-zinc-400">3</strong> jogos do mandante no
             histórico.
           </p>
           <p className="mt-2">
+            Os nomes das colunas são os mesmos mercados da oferta (e do Telegram).
             Cada mercado usa a mesma heurística (moda / tendência nos últimos N
-            jogos do mandante). Mercados como placar exato ou número exato de
-            gols são naturalmente mais difíceis — os % refletem isso.
+            jogos do mandante). Placar exato ou número exato tendem a % mais
+            baixas.
           </p>
         </div>
     </PageShell>

@@ -96,7 +96,7 @@ model SignalPrediction {
   oddsAtSignalJson String?
 }
 
-/// Último resultado do simulador de estratégias (atualizado pelo coletor).
+/// Último resultado da simulação walk-forward por mercado (atualizado pelo coletor).
 model StrategySimRun {
   id          String   @id @default(cuid())
   createdAt   DateTime @default(now())

@@ -17,11 +17,14 @@ export type StrategyDef = {
   maxRounds: number;
 };
 
-/** Estratégias comparáveis (só muda quantidade de jogos no histórico). */
+/**
+ * Janelas de histórico do mandante (walk-forward). Não são “mercados” — os mercados
+ * são as colunas % na simulação; estes ids alimentam só quantos jogos passados entram.
+ */
 export const BACKTEST_STRATEGIES: StrategyDef[] = [
-  { id: "5j", label: "Últimos 5 jogos", maxRounds: 5 },
-  { id: "10j", label: "Últimos 10 jogos (atual)", maxRounds: 10 },
-  { id: "15j", label: "Últimos 15 jogos", maxRounds: 15 },
+  { id: "5j", label: "Histórico: 5 jogos como mandante", maxRounds: 5 },
+  { id: "10j", label: "Histórico: 10 jogos como mandante (padrão coletor)", maxRounds: 10 },
+  { id: "15j", label: "Histórico: 15 jogos como mandante", maxRounds: 15 },
 ];
 
 export type StrategyAgg = {

@@ -15,7 +15,7 @@ Copie `.env.example` para `.env` e ajuste:
 - `CRON_SECRET` — Bearer token para `GET /api/cron/collector` e `POST /api/strategy-sim/refresh` (produção)
 - `ENABLE_COLLECTOR_CRON=true` — no **desenvolvimento**, agenda o coletor a cada **1 minuto** no processo Node (`src/instrumentation.ts`) para virtual (ciclos curtos)
 - `ENABLE_SIGNALS=false` — modo **só captura**: continua a gravar listagens, odds, `Result`, liquidação e subscription; **não** cria/resolve sinais nem recalcula simulação de estratégia. Omisso ou `true` = comportamento completo (sinais ligados)
-- `SIGNAL_MARKETS_ENABLED` — opcional; lista `oneX2`, `btts`, `teamOu` (separados por vírgula) para incluir só esses mercados nos sinais gerados pelo coletor **e no simulador** (`/strategy`). Por omissão são os três. Catálogo: `GET /api/signal-markets`.
+- `SIGNAL_MARKETS_ENABLED` — opcional; lista `oneX2`, `btts`, `teamOu` (separados por vírgula) para incluir só esses mercados nos sinais gerados pelo coletor **e na simulação** (`/strategy`, nomes de mercado = oferta / sinal). Por omissão são os três. Catálogo: `GET /api/signal-markets`.
 
 ## Banco de dados
 

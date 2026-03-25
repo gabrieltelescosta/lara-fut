@@ -8,7 +8,7 @@ import {
   formatKickoffHHmm,
   primaryMarketHit,
 } from "@/lib/telegram-format";
-import { MARKET_SHORT_LABEL } from "@/lib/signal-market-catalog";
+import { marketDisplayName } from "@/lib/signal-market-catalog";
 import {
   countActivePicks,
   type GradeResult,
@@ -192,7 +192,7 @@ export async function notifyTelegramSignalResolved(params: {
   if (!primary) return;
 
   const hit = primaryMarketHit(params.grade, primary);
-  const marketLabel = MARKET_SHORT_LABEL[primary];
+  const marketLabel = marketDisplayName(primary);
 
   const state = await loadState();
   const maxA = state.maxAttempts;

@@ -1,6 +1,6 @@
 import {
   IMPLEMENTED_MARKET_IDS,
-  MARKET_SHORT_LABEL,
+  marketDisplayName,
   type ImplementedMarketId,
 } from "@/lib/signal-market-catalog";
 import { prisma } from "@/lib/prisma";
@@ -98,7 +98,7 @@ export async function GET() {
       hit: 0,
       total: 0,
       pct: null,
-      label: MARKET_SHORT_LABEL[id],
+      label: marketDisplayName(id),
     };
   }
 

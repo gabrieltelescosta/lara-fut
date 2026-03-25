@@ -11,8 +11,9 @@ export default function Home() {
           <code className="text-zinc-500">sportId 190</code>). Os{" "}
           <strong className="text-zinc-200">sinais</strong> são gerados pelo
           coletor e acompanhados no <strong className="text-zinc-200">Tracker</strong>
-          ; a <strong className="text-zinc-200">Estratégia</strong> mostra o
-          backtest walk-forward sobre o mesmo histórico.
+          ; a <strong className="text-zinc-200">Simulação</strong> mostra o
+          backtest walk-forward por mercado (mesmos nomes do sinal) sobre o
+          histórico.
         </>
       }
     >
@@ -33,7 +34,7 @@ export default function Home() {
             </li>
             <li>
               <strong className="text-zinc-300">Refino:</strong>{" "}
-              <span className="text-zinc-500">Estratégia</span> compara
+              <span className="text-zinc-500">Simulação</span> compara
               heurísticas; <span className="text-zinc-500">Estatísticas</span>{" "}
               agrega placares.
             </li>

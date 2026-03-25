@@ -66,7 +66,16 @@ export const SIGNAL_MARKET_CATALOG: CatalogEntry[] = [
   },
 ];
 
-/** Rótulos curtos para tabelas (UI / API). */
+/**
+ * Nome do mercado alinhado à oferta Superbet e ao texto do sinal (Telegram / tracker).
+ * Preferir isto a `MARKET_SHORT_LABEL` em qualquer UI ou mensagem ao utilizador.
+ */
+export function marketDisplayName(id: ImplementedMarketId): string {
+  const c = SIGNAL_MARKET_CATALOG.find((x) => x.id === id);
+  return c?.labelPt ?? id;
+}
+
+/** Rótulos muito curtos (só onde o espaço é crítico — logs, colunas estreitas). */
 export const MARKET_SHORT_LABEL: Record<ImplementedMarketId, string> = {
   oneX2: "1X2",
   btts: "BTTS",
