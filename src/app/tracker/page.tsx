@@ -33,6 +33,9 @@ type Row = {
   picksCount?: number;
   grades?: Partial<Record<string, boolean | null>>;
   oddsAtSignalLines?: number;
+  oddsTeamOuAtSignal?: number | null;
+  galeAttemptInChain?: number | null;
+  galeChainStatus?: "green" | "red-keep" | "red-final" | null;
 };
 
 function BankrollSparkline({ values }: { values: number[] }) {
@@ -268,6 +271,11 @@ export default function TrackerPage() {
               <code className="text-zinc-600">odds</code>). Cada sinal novo
               guarda um snapshot das cotações no momento da criação (
               <code className="text-zinc-600">oddsAtSignalLines</code> na API).
+              Para o mercado principal do plano atual, mostramos também a odd de{" "}
+              <strong className="text-zinc-300">
+                Total de Gols da Equipe
+              </strong>{" "}
+              no instante do sinal.
             </p>
           </div>
         )}
@@ -692,6 +700,7 @@ export default function TrackerPage() {
                   >
                     Odds no sinal
                   </th>
+                  <th className={ui.th}>Cadeia gale</th>
                   <th className={ui.th}>Pts</th>
                 </tr>
               </thead>
@@ -743,9 +752,38 @@ export default function TrackerPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2 align-top font-mono text-xs text-zinc-400">
-                      {r.oddsAtSignalLines != null && r.oddsAtSignalLines > 0
-                        ? `${r.oddsAtSignalLines} linhas`
-                        : "—"}
+                      {r.oddsAtSignalLines != null && r.oddsAtSignalLines > 0 ? (
+                        <div className="space-y-0.5">
+                          <div>{r.oddsAtSignalLines} linhas</div>
+                          <div className="text-amber-200/90">
+                            TeamOu:{" "}
+                            {typeof r.oddsTeamOuAtSignal === "number"
+                              ? `@ ${r.oddsTeamOuAtSignal.toFixed(2)}`
+                              : "—"}
+                          </div>
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2 align-top text-xs">
+                      <div className="font-mono text-zinc-300">
+                        {r.galeAttemptInChain != null ? `T${r.galeAttemptInChain}` : "—"}
+                      </div>
+                      <div className="text-[10px]">
+                        {r.galeChainStatus === "green" && (
+                          <span className="text-emerald-400/90">GREEN fecha ciclo</span>
+                        )}
+                        {r.galeChainStatus === "red-final" && (
+                          <span className="text-red-400/90">RED final (gales esgotados)</span>
+                        )}
+                        {r.galeChainStatus === "red-keep" && (
+                          <span className="text-amber-300/90">RED parcial (segue gale)</span>
+                        )}
+                        {r.galeChainStatus == null && (
+                          <span className="text-zinc-500">—</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-center font-mono text-lg font-semibold text-zinc-100">
                       {r.hitsTotal ?? "—"}

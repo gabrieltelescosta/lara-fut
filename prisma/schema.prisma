@@ -117,3 +117,16 @@ model TelegramGaleState {
   pendingEditNext Boolean @default(false)
   updatedAt DateTime @updatedAt
 }
+
+/// Configuração Telegram (singleton id = 1). Campos null = usar fallback do `.env`.
+model TelegramAppSettings {
+  id            Int      @id @default(1)
+  enabled       Boolean?
+  botToken      String?
+  chatId        String?
+  signalMarkets String?
+  /// Número de gales (recuperações), igual a TELEGRAM_GALE_MAX.
+  galeMax       Int?
+  timezone      String?
+  updatedAt     DateTime @updatedAt
+}

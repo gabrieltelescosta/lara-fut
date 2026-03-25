@@ -28,6 +28,7 @@ import {
   getSignalMinLeadMs,
 } from "@/lib/signal-timing";
 import { groupLatestOddsByEventId } from "@/lib/odds-snapshot-utils";
+import { pickOddByMarket, type OddsLineLite } from "@/lib/signal-odds";
 
 /**
  * Janela legada (minutos). Preferir `getSignalLookaheadMs()` / `SIGNAL_LOOKAHEAD_MINUTES`.
@@ -87,7 +88,7 @@ async function loadFinishedMatches(): Promise<FinishedMatch[]> {
  * Cria sinais para jogos na janela (sem duplicar por eventId).
  * Com `SIGNAL_BEST_HOME_TEAM_ONLY`, no máximo 1 sinal **ativo** (pendente): enquanto existir
  * `SignalPrediction` sem `resolvedAt`, não cria outro — evita vários Telegrams numa mesma janela (cron a cada minuto).
- * Usa `SIGNAL_ROUNDS` fixo; não lê ainda o vencedor do simulador — ver comentário em `signal-picks.ts`.
+ * Usa `SIGNAL_ROUNDS` fixo (15 jogos mandante); não lê ainda vencedor dinâmico do simulador.
  */
 export async function generateUpcomingSignals(): Promise<{
   created: number;
@@ -234,6 +235,23 @@ export async function generateUpcomingSignals(): Promise<{
         ? `\n📊 Ranking mandante (${rankMeta.market}): ${rankMeta.pct}% em ${rankMeta.evaluated} jogos simulados`
         : "";
 
+    const latestOdds = latestOddsByEvent.get(ev.id) ?? [];
+    const oddsLite: OddsLineLite[] = latestOdds.map((o) => ({
+      marketName: o.marketName,
+      outcomeName: o.outcomeName,
+      price: o.price,
+      info: o.info,
+    }));
+    const oddTeamOu = pickOddByMarket({
+      marketId: "teamOu",
+      picks,
+      homeTeam: p.home,
+      odds: oddsLite,
+    });
+    const oddLine =
+      picks.teamOu && oddTeamOu != null
+        ? `\n💸 Odd no sinal (Total de Gols da Equipe): @ ${oddTeamOu.toFixed(2)}`
+        : "";
     const message =
       buildSimpleSignalMessage(
         p.home,
@@ -241,9 +259,10 @@ export async function generateUpcomingSignals(): Promise<{
         ev.matchDate,
         picks,
         roundsUsed,
-      ) + rankLine;
+      ) +
+      oddLine +
+      rankLine;
 
-    const latestOdds = latestOddsByEvent.get(ev.id) ?? [];
     const oddsAtSignalJson =
       latestOdds.length > 0
         ? JSON.stringify(
@@ -273,13 +292,14 @@ export async function generateUpcomingSignals(): Promise<{
     created += 1;
 
     try {
-      const tgPicks = subsetPicks(fullPicks, getTelegramSignalMarkets());
+      const tgPicks = subsetPicks(fullPicks, await getTelegramSignalMarkets());
       await notifyTelegramSignalCreated({
         homeTeam: p.home,
         awayTeam: p.away,
         matchDate: ev.matchDate,
         tgPicks,
         roundsUsed,
+        oddsByMarket: { teamOu: oddTeamOu },
         rankLine:
           signalBestHomeTeamOnly() && rankMeta
             ? `📊 Ranking mandante (${rankMeta.market}): ${rankMeta.pct}% em ${rankMeta.evaluated} jogos simulados`

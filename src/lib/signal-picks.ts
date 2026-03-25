@@ -17,8 +17,8 @@ import {
   type TeamPerspective,
 } from "@/lib/team-stats";
 
-/** Fixo em produção até validar o simulador em `/strategy`; fase 2 = alinhar ao melhor `maxRounds` do backtest. */
-export const SIGNAL_ROUNDS = 10;
+/** Janela ativa do sinal: últimos 15 jogos do mandante. */
+export const SIGNAL_ROUNDS = 15;
 
 export type FullPicks = {
   oneX2: "1" | "X" | "2";

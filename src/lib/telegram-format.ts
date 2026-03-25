@@ -3,20 +3,18 @@ import type { ImplementedMarketId } from "@/lib/signal-market-catalog";
 import type { GradeResult, StoredPicksJson } from "@/lib/signal-picks";
 import { getSignalMinLeadMinutes } from "@/lib/signal-timing";
 
-const TZ = process.env.TELEGRAM_TIMEZONE?.trim() || "America/Sao_Paulo";
-
-export function formatKickoffHHmm(d: Date): string {
+export function formatKickoffHHmm(d: Date, timeZone: string): string {
   return d.toLocaleTimeString("pt-BR", {
-    timeZone: TZ,
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
 }
 
-export function formatKickoffDateTime(d: Date): string {
+export function formatKickoffDateTime(d: Date, timeZone: string): string {
   return d.toLocaleString("pt-BR", {
-    timeZone: TZ,
+    timeZone,
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -26,9 +24,9 @@ export function formatKickoffDateTime(d: Date): string {
 }
 
 /** +5 min (grade típico virtual) para referência de tempo. */
-export function formatNextGradeHint(d: Date): string {
+export function formatNextGradeHint(d: Date, timeZone: string): string {
   const t = new Date(d.getTime() + 5 * 60 * 1000);
-  return formatKickoffHHmm(t);
+  return formatKickoffHHmm(t, timeZone);
 }
 
 function pickLineForMarket(
@@ -63,9 +61,11 @@ export function buildTelegramSignalCard(params: {
   picks: StoredPicksJson;
   telegramMarkets: ImplementedMarketId[];
   roundsUsed: number;
+  timeZone: string;
   rankLine?: string;
   attemptLabel?: string;
   nextKickoffHint?: string | null;
+  oddsByMarket?: Partial<Record<ImplementedMarketId, number | null>>;
 }): string {
   const {
     homeTeam,
@@ -74,13 +74,15 @@ export function buildTelegramSignalCard(params: {
     picks,
     telegramMarkets,
     roundsUsed,
+    timeZone,
     rankLine,
     attemptLabel,
     nextKickoffHint,
+    oddsByMarket,
   } = params;
 
-  const t0 = formatKickoffHHmm(matchDate);
-  const t5 = formatNextGradeHint(matchDate);
+  const t0 = formatKickoffHHmm(matchDate, timeZone);
+  const t5 = formatNextGradeHint(matchDate, timeZone);
   const leadMin = getSignalMinLeadMinutes();
 
   const lines: string[] = [
@@ -101,7 +103,12 @@ export function buildTelegramSignalCard(params: {
   for (const id of telegramMarkets) {
     const line = pickLineForMarket(id, picks, homeTeam);
     if (line) {
-      lines.push(`  • ${marketDisplayName(id)}: ${line}`);
+      const odd = oddsByMarket?.[id];
+      const oddText =
+        typeof odd === "number" && Number.isFinite(odd)
+          ? ` @ ${odd.toFixed(2)}`
+          : "";
+      lines.push(`  • ${marketDisplayName(id)}: ${line}${oddText}`);
     }
   }
 

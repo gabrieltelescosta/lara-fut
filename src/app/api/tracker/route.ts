@@ -4,6 +4,9 @@ import {
   type ImplementedMarketId,
 } from "@/lib/signal-market-catalog";
 import { prisma } from "@/lib/prisma";
+import { pickOddByMarket, type OddsLineLite } from "@/lib/signal-odds";
+import type { StoredPicksJson } from "@/lib/signal-picks";
+import { getResolvedTelegramSettings } from "@/lib/telegram-settings";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -54,30 +57,60 @@ function gradesMapFromRow(r: {
 }
 
 export async function GET() {
-  const [
-    rows,
-    firstSignal,
-    firstEvent,
-    oddsSnapshotsTotal,
-    eventsTotal,
-    tournamentsTotal,
-  ] = await Promise.all([
-    prisma.signalPrediction.findMany({
-      orderBy: { matchDate: "desc" },
-      take: 200,
-    }),
-    prisma.signalPrediction.findFirst({
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
-    prisma.event.findFirst({
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
-    prisma.oddsSnapshot.count(),
-    prisma.event.count(),
-    prisma.tournament.count(),
-  ]);
+  const [resolvedTg, rows, firstSignal, firstEvent, oddsSnapshotsTotal, eventsTotal, tournamentsTotal] =
+    await Promise.all([
+      getResolvedTelegramSettings(),
+      prisma.signalPrediction.findMany({
+        orderBy: { matchDate: "desc" },
+        take: 200,
+      }),
+      prisma.signalPrediction.findFirst({
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+      prisma.event.findFirst({
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+      prisma.oddsSnapshot.count(),
+      prisma.event.count(),
+      prisma.tournament.count(),
+    ]);
+
+  const maxAttempts = 1 + resolvedTg.galeMaxRecoveries;
+
+  const rowsAsc = [...rows].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+  const chainById = new Map<
+    string,
+    { attempt: number; status: "green" | "red-keep" | "red-final" | null }
+  >();
+  let attempt = 1;
+  for (const r of rowsAsc) {
+    if (r.resolvedAt == null) {
+      chainById.set(r.id, { attempt, status: null });
+      continue;
+    }
+    const grades = gradesMapFromRow(r);
+    const primary = grades.teamOu;
+    if (primary === true) {
+      chainById.set(r.id, { attempt, status: "green" });
+      attempt = 1;
+      continue;
+    }
+    if (primary === false) {
+      if (attempt >= maxAttempts) {
+        chainById.set(r.id, { attempt, status: "red-final" });
+        attempt = 1;
+      } else {
+        chainById.set(r.id, { attempt, status: "red-keep" });
+        attempt += 1;
+      }
+      continue;
+    }
+    chainById.set(r.id, { attempt, status: null });
+  }
 
   const resolved = rows.filter((r) => r.resolvedAt != null);
   const totalHits = resolved.reduce((s, r) => s + (r.hitsTotal ?? 0), 0);
@@ -131,6 +164,35 @@ export async function GET() {
     }
   }
 
+  function parseOddsAtSignal(oddsAtSignalJson: string | null): OddsLineLite[] {
+    if (!oddsAtSignalJson) return [];
+    try {
+      const a = JSON.parse(oddsAtSignalJson) as Array<Record<string, unknown>>;
+      if (!Array.isArray(a)) return [];
+      return a
+        .map((o) => {
+          const marketName = String(o.marketName ?? "");
+          const outcomeName = String(o.outcomeName ?? "");
+          const price = Number(o.price);
+          const info =
+            o.info == null || o.info === "" ? null : String(o.info);
+          if (!marketName || !outcomeName || !Number.isFinite(price)) return null;
+          return { marketName, outcomeName, price, info };
+        })
+        .filter((x): x is OddsLineLite => x != null);
+    } catch {
+      return [];
+    }
+  }
+
+  function parseStoredPicks(picksJson: string): StoredPicksJson {
+    try {
+      return JSON.parse(picksJson) as StoredPicksJson;
+    } catch {
+      return {};
+    }
+  }
+
   return NextResponse.json({
     summary: {
       pending: rows.filter((r) => !r.resolvedAt).length,
@@ -150,23 +212,36 @@ export async function GET() {
       tournamentsTotal,
     },
     byMarket,
-    data: rows.map((r) => ({
-      id: r.id,
-      superbetEventId: r.superbetEventId,
-      matchName: r.matchName,
-      matchDate: r.matchDate.toISOString(),
-      message: r.message,
-      createdAt: r.createdAt.toISOString(),
-      resolvedAt: r.resolvedAt?.toISOString() ?? null,
-      homeScore: r.homeScore,
-      awayScore: r.awayScore,
-      hitOneX2: r.hitOneX2,
-      hitBtts: r.hitBtts,
-      hitTeamOu: r.hitTeamOu,
-      hitsTotal: r.hitsTotal,
-      picksCount: parsePicksKeys(r.picksJson).size,
-      grades: gradesMapFromRow(r),
-      oddsAtSignalLines: oddsAtSignalLineCount(r.oddsAtSignalJson),
-    })),
+    data: rows.map((r) => {
+      const picks = parseStoredPicks(r.picksJson);
+      const oddsLite = parseOddsAtSignal(r.oddsAtSignalJson);
+      const oddTeamOu = pickOddByMarket({
+        marketId: "teamOu",
+        picks,
+        homeTeam: r.homeTeam,
+        odds: oddsLite,
+      });
+      return {
+        id: r.id,
+        superbetEventId: r.superbetEventId,
+        matchName: r.matchName,
+        matchDate: r.matchDate.toISOString(),
+        message: r.message,
+        createdAt: r.createdAt.toISOString(),
+        resolvedAt: r.resolvedAt?.toISOString() ?? null,
+        homeScore: r.homeScore,
+        awayScore: r.awayScore,
+        hitOneX2: r.hitOneX2,
+        hitBtts: r.hitBtts,
+        hitTeamOu: r.hitTeamOu,
+        hitsTotal: r.hitsTotal,
+        picksCount: parsePicksKeys(r.picksJson).size,
+        grades: gradesMapFromRow(r),
+        oddsAtSignalLines: oddsAtSignalLineCount(r.oddsAtSignalJson),
+        oddsTeamOuAtSignal: oddTeamOu,
+        galeAttemptInChain: chainById.get(r.id)?.attempt ?? null,
+        galeChainStatus: chainById.get(r.id)?.status ?? null,
+      };
+    }),
   });
 }

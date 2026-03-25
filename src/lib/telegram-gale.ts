@@ -8,12 +8,16 @@ import {
   formatKickoffHHmm,
   primaryMarketHit,
 } from "@/lib/telegram-format";
-import { marketDisplayName } from "@/lib/signal-market-catalog";
+import {
+  marketDisplayName,
+  type ImplementedMarketId,
+} from "@/lib/signal-market-catalog";
 import {
   countActivePicks,
   type GradeResult,
   type StoredPicksJson,
 } from "@/lib/signal-picks";
+import { getResolvedTelegramSettings } from "@/lib/telegram-settings";
 import {
   buildTelegramResolvedMessage,
   editTelegramMessage,
@@ -24,23 +28,23 @@ import {
 
 const STATE_ID = 1;
 
-export function getTelegramGaleMaxRecoveries(): number {
-  const n = parseInt(process.env.TELEGRAM_GALE_MAX ?? "3", 10);
-  if (Number.isNaN(n) || n < 0) return 3;
-  return Math.min(10, n);
+export async function getTelegramGaleMaxRecoveries(): Promise<number> {
+  const r = await getResolvedTelegramSettings();
+  return r.galeMaxRecoveries;
 }
 
 /** Total de jogadas na cadeia: 1 entrada + N gales. */
-export function getTelegramMaxAttemptsInChain(): number {
-  return 1 + getTelegramGaleMaxRecoveries();
+export async function getTelegramMaxAttemptsInChain(): Promise<number> {
+  return 1 + (await getTelegramGaleMaxRecoveries());
 }
 
 async function loadState() {
+  const maxA = await getTelegramMaxAttemptsInChain();
   return prisma.telegramGaleState.upsert({
     where: { id: STATE_ID },
     create: {
       id: STATE_ID,
-      maxAttempts: getTelegramMaxAttemptsInChain(),
+      maxAttempts: maxA,
     },
     update: {},
   });
@@ -63,7 +67,10 @@ async function saveState(data: {
   });
 }
 
-async function nextEventKickoffHint(after: Date): Promise<string | null> {
+async function nextEventKickoffHint(
+  after: Date,
+  timeZone: string,
+): Promise<string | null> {
   const ev = await prisma.event.findFirst({
     where: {
       result: null,
@@ -73,7 +80,7 @@ async function nextEventKickoffHint(after: Date): Promise<string | null> {
     select: { matchDate: true },
   });
   if (!ev) return null;
-  return formatKickoffHHmm(ev.matchDate);
+  return formatKickoffHHmm(ev.matchDate, timeZone);
 }
 
 export async function notifyTelegramSignalCreated(params: {
@@ -83,14 +90,19 @@ export async function notifyTelegramSignalCreated(params: {
   tgPicks: StoredPicksJson;
   roundsUsed: number;
   rankLine?: string;
+  oddsByMarket?: Partial<Record<ImplementedMarketId, number | null>>;
 }): Promise<void> {
-  if (!isTelegramEnabled()) return;
+  if (!(await isTelegramEnabled())) return;
 
-  const tgMarkets = getTelegramSignalMarkets();
+  const settings = await getResolvedTelegramSettings();
+  const tgMarkets = await getTelegramSignalMarkets();
   if (countActivePicks(params.tgPicks) === 0) return;
 
   if (!signalBestHomeTeamOnly()) {
-    const nextHint = await nextEventKickoffHint(params.matchDate);
+    const nextHint = await nextEventKickoffHint(
+      params.matchDate,
+      settings.timezone,
+    );
     const body = buildTelegramSignalCard({
       homeTeam: params.homeTeam,
       awayTeam: params.awayTeam,
@@ -98,14 +110,16 @@ export async function notifyTelegramSignalCreated(params: {
       picks: params.tgPicks,
       telegramMarkets: tgMarkets,
       roundsUsed: params.roundsUsed,
+      timeZone: settings.timezone,
       rankLine: params.rankLine,
       nextKickoffHint: nextHint,
+      oddsByMarket: params.oddsByMarket,
     });
     await sendTelegramMessage(body);
     return;
   }
 
-  const maxA = getTelegramMaxAttemptsInChain();
+  const maxA = await getTelegramMaxAttemptsInChain();
   let state = await loadState();
   if (state.maxAttempts !== maxA) {
     await prisma.telegramGaleState.update({
@@ -115,7 +129,10 @@ export async function notifyTelegramSignalCreated(params: {
     state = await loadState();
   }
 
-  const nextHint = await nextEventKickoffHint(params.matchDate);
+  const nextHint = await nextEventKickoffHint(
+    params.matchDate,
+    settings.timezone,
+  );
   const displayAttempt = state.pendingEditNext
     ? state.currentAttempt + 1
     : Math.max(1, state.currentAttempt || 1);
@@ -128,9 +145,11 @@ export async function notifyTelegramSignalCreated(params: {
     picks: params.tgPicks,
     telegramMarkets: tgMarkets,
     roundsUsed: params.roundsUsed,
+    timeZone: settings.timezone,
     rankLine: params.rankLine,
     attemptLabel,
     nextKickoffHint: nextHint,
+    oddsByMarket: params.oddsByMarket,
   });
 
   if (state.pendingEditNext && state.messageId != null) {
@@ -170,9 +189,11 @@ export async function notifyTelegramSignalResolved(params: {
   picks: StoredPicksJson;
   grade: GradeResult;
 }): Promise<void> {
-  if (!isTelegramEnabled()) {
+  if (!(await isTelegramEnabled())) {
     return;
   }
+
+  const settings = await getResolvedTelegramSettings();
 
   if (!signalBestHomeTeamOnly()) {
     const text = buildTelegramResolvedMessage({
@@ -181,13 +202,13 @@ export async function notifyTelegramSignalResolved(params: {
       awayScore: params.awayScore,
       picks: params.picks,
       grade: params.grade,
-      telegramMarkets: getTelegramSignalMarkets(),
+      telegramMarkets: await getTelegramSignalMarkets(),
     });
     await sendTelegramMessage(text);
     return;
   }
 
-  const tgMarkets = getTelegramSignalMarkets();
+  const tgMarkets = await getTelegramSignalMarkets();
   const primary = tgMarkets[0];
   if (!primary) return;
 
@@ -214,14 +235,14 @@ export async function notifyTelegramSignalResolved(params: {
     await saveState({
       messageId: null,
       currentAttempt: 0,
-      maxAttempts: getTelegramMaxAttemptsInChain(),
+      maxAttempts: await getTelegramMaxAttemptsInChain(),
       pendingEditNext: false,
     });
     return;
   }
 
   if (hit === false) {
-    const nextHint = await nextEventKickoffHint(new Date());
+    const nextHint = await nextEventKickoffHint(new Date(), settings.timezone);
     if (state.currentAttempt >= maxA) {
       const text = buildTelegramGaleFinalRed({
         matchName: params.matchName,
@@ -238,7 +259,7 @@ export async function notifyTelegramSignalResolved(params: {
       await saveState({
         messageId: null,
         currentAttempt: 0,
-        maxAttempts: getTelegramMaxAttemptsInChain(),
+        maxAttempts: await getTelegramMaxAttemptsInChain(),
         pendingEditNext: false,
       });
       return;

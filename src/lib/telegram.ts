@@ -9,6 +9,7 @@ import {
   type ImplementedMarketId,
 } from "@/lib/signal-market-catalog";
 import type { GradeResult, StoredPicksJson } from "@/lib/signal-picks";
+import { getResolvedTelegramSettings } from "@/lib/telegram-settings";
 
 function parseTelegramMarketList(raw: string): ImplementedMarketId[] {
   const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
@@ -27,13 +28,15 @@ function parseTelegramMarketList(raw: string): ImplementedMarketId[] {
 }
 
 /**
- * Mercados nas mensagens Telegram.
+ * Mercados nas mensagens Telegram (usa CSV resolvido BD + env).
  * Com `SIGNAL_BEST_HOME_TEAM_ONLY`: **um** mercado — o de ranking (`SIGNAL_RANK_MARKET`, default teamOu)
- * se `TELEGRAM_SIGNAL_MARKETS` estiver vazio; senão só o **primeiro** id da lista.
+ * se o CSV estiver vazio; senão só o **primeiro** id da lista.
  * Sem essa flag: vazio → igual a `SIGNAL_MARKETS_ENABLED`; senão lista completa válida.
  */
-export function getTelegramSignalMarkets(): ImplementedMarketId[] {
-  const raw = process.env.TELEGRAM_SIGNAL_MARKETS?.trim();
+function getTelegramSignalMarketsFromMergedCsv(
+  telegramSignalMarketsCsv: string,
+): ImplementedMarketId[] {
+  const raw = telegramSignalMarketsCsv.trim();
 
   if (signalBestHomeTeamOnly()) {
     const rank = parseSignalRankMarket();
@@ -65,10 +68,15 @@ export function getTelegramSignalMarkets(): ImplementedMarketId[] {
   return list;
 }
 
-export function isTelegramEnabled(): boolean {
-  const v = process.env.TELEGRAM_ENABLED?.trim().toLowerCase();
-  if (v === "true" || v === "1" || v === "yes") return true;
-  return false;
+export async function getTelegramSignalMarkets(): Promise<ImplementedMarketId[]> {
+  const r = await getResolvedTelegramSettings();
+  return getTelegramSignalMarketsFromMergedCsv(r.telegramSignalMarketsCsv);
+}
+
+export async function isTelegramEnabled(): Promise<boolean> {
+  const r = await getResolvedTelegramSettings();
+  const v = r.enabled;
+  return v === true;
 }
 
 export type TelegramSendResult = {
@@ -80,12 +88,13 @@ export type TelegramSendResult = {
  * Envia texto ao chat configurado. Erros são logados; não lança.
  */
 export async function sendTelegramMessage(text: string): Promise<TelegramSendResult> {
-  if (!isTelegramEnabled()) return { ok: false };
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+  const r = await getResolvedTelegramSettings();
+  if (!r.enabled) return { ok: false };
+  const token = r.botToken;
+  const chatId = r.chatId;
   if (!token || !chatId) {
     console.warn(
-      "[telegram] TELEGRAM_ENABLED mas falta TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID",
+      "[telegram] Telegram ativo mas falta bot token ou chat id (BD ou .env)",
     );
     return { ok: false };
   }
@@ -94,7 +103,7 @@ export async function sendTelegramMessage(text: string): Promise<TelegramSendRes
     text: text.slice(0, 4096),
   };
   try {
-    const r = await fetch(
+    const res = await fetch(
       `https://api.telegram.org/bot${token}/sendMessage`,
       {
         method: "POST",
@@ -102,8 +111,8 @@ export async function sendTelegramMessage(text: string): Promise<TelegramSendRes
         body: JSON.stringify(body),
       },
     );
-    const raw = await r.text();
-    if (!r.ok) {
+    const raw = await res.text();
+    if (!res.ok) {
       console.warn("[telegram] sendMessage failed:", raw);
       return { ok: false };
     }
@@ -122,18 +131,19 @@ export async function sendTelegramMessage(text: string): Promise<TelegramSendRes
 }
 
 /**
- * Edita mensagem existente (mesmo chat do `.env`).
+ * Edita mensagem existente (mesmo chat configurado).
  */
 export async function editTelegramMessage(
   messageId: number,
   text: string,
 ): Promise<boolean> {
-  if (!isTelegramEnabled()) return false;
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+  const r = await getResolvedTelegramSettings();
+  if (!r.enabled) return false;
+  const token = r.botToken;
+  const chatId = r.chatId;
   if (!token || !chatId) {
     console.warn(
-      "[telegram] TELEGRAM_ENABLED mas falta TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID",
+      "[telegram] Telegram ativo mas falta bot token ou chat id (BD ou .env)",
     );
     return false;
   }
@@ -143,7 +153,7 @@ export async function editTelegramMessage(
     text: text.slice(0, 4096),
   };
   try {
-    const r = await fetch(
+    const res = await fetch(
       `https://api.telegram.org/bot${token}/editMessageText`,
       {
         method: "POST",
@@ -151,8 +161,8 @@ export async function editTelegramMessage(
         body: JSON.stringify(body),
       },
     );
-    if (!r.ok) {
-      console.warn("[telegram] editMessageText failed:", await r.text());
+    if (!res.ok) {
+      console.warn("[telegram] editMessageText failed:", await res.text());
       return false;
     }
     return true;
