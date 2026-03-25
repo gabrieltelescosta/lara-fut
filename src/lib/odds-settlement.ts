@@ -105,9 +105,9 @@ export function gradeOddsLine(
     return null;
   }
 
-  // --- Total de gols da equipe (mandante): linha 2.5 típica virtual ---
+  // --- Total de gols da equipe (mandante): linha 1.5 virtual ---
   if (m.includes("equipe") || (m.includes("(v)") && m.includes("gol"))) {
-    const overH = homeScore > 2;
+    const overH = homeScore > 1;
     if (ol.includes("mais") || inf.includes("mais")) return overH;
     if (ol.includes("menos") || inf.includes("menos")) return !overH;
     return null;

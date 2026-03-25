@@ -32,7 +32,7 @@ export const SIGNAL_MARKET_CATALOG: CatalogEntry[] = [
   { id: "oneX2", labelPt: "Resultado Final", implemented: true },
   {
     id: "teamOu",
-    labelPt: "Total de Gols da Equipe (mandante, linha 2.5)",
+    labelPt: "Total de Gols da Equipe (mandante, linha 1.5)",
     implemented: true,
   },
   { id: "btts", labelPt: "Ambos as Equipes Marcam", implemented: true },
@@ -79,7 +79,7 @@ export function marketDisplayName(id: ImplementedMarketId): string {
 export const MARKET_SHORT_LABEL: Record<ImplementedMarketId, string> = {
   oneX2: "1X2",
   btts: "BTTS",
-  teamOu: "Gols mand. 2.5",
+  teamOu: "Gols mand. 1.5",
   totalGolsJogo: "Total gols 2.5",
   duplaChance: "Dupla",
   faixaGolsTotais: "Faixa gols",

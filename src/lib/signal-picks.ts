@@ -23,7 +23,7 @@ export const SIGNAL_ROUNDS = 15;
 export type FullPicks = {
   oneX2: "1" | "X" | "2";
   btts: "sim" | "nao";
-  teamOu: { team: string; line: 2.5; side: "mais" | "menos" };
+  teamOu: { team: string; line: 1.5; side: "mais" | "menos" };
   totalGolsJogo: { line: 2.5; side: "mais" | "menos" };
   duplaChance: "1X" | "12" | "X2";
   faixaGolsTotais: FaixaGolsTotais;
@@ -205,7 +205,7 @@ export function computePicksFromHistory(
   const b = countBtts(rows);
   const btts: "sim" | "nao" = b.sim >= b.nao ? "sim" : "nao";
 
-  const ou = countTeamTotalOU(rows, 2.5);
+  const ou = countTeamTotalOU(rows, 1.5);
   const sideTeam: "mais" | "menos" = ou.over >= ou.under ? "mais" : "menos";
 
   const ouTot = countTotalMatchGoalsOU(rows);
@@ -231,7 +231,7 @@ export function computePicksFromHistory(
   return {
     oneX2,
     btts,
-    teamOu: { team: homeTeam, line: 2.5, side: sideTeam },
+    teamOu: { team: homeTeam, line: 1.5, side: sideTeam },
     totalGolsJogo: { line: 2.5, side: sideTot },
     duplaChance,
     faixaGolsTotais,
@@ -282,7 +282,7 @@ export function buildSimpleSignalMessage(
     }
     if (id === "teamOu" && picks.teamOu !== undefined) {
       const ou = picks.teamOu.side === "mais" ? "Mais" : "Menos";
-      lines.push(`Total de Gols da Equipe (${homeTeam}): ${ou} 2.5`);
+      lines.push(`Total de Gols da Equipe (${homeTeam}): ${ou} 1.5`);
     }
     if (id === "btts" && picks.btts !== undefined) {
       const bttsLabel = picks.btts === "sim" ? "Sim" : "Não";
@@ -330,9 +330,9 @@ export function actualBtts(homeScore: number, awayScore: number): "sim" | "nao" 
   return homeScore >= 1 && awayScore >= 1 ? "sim" : "nao";
 }
 
-/** Mais 2.5 gols do mandante = 3+ gols. */
-export function teamMais25(homeGoals: number): boolean {
-  return homeGoals >= 3;
+/** Mais 1.5 gols do mandante = 2+ gols. */
+export function teamMais15(homeGoals: number): boolean {
+  return homeGoals >= 2;
 }
 
 export function actualTotalGolsOu25(
@@ -379,7 +379,7 @@ export function gradePicks(
     if (ok) hitsTotal += 1;
   }
   if (picks.teamOu !== undefined) {
-    const mais = teamMais25(homeScore);
+    const mais = teamMais15(homeScore);
     const ok = picks.teamOu.side === "mais" ? mais : !mais;
     byMarket.teamOu = ok;
     if (ok) hitsTotal += 1;

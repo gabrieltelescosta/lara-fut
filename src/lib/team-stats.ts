@@ -251,7 +251,7 @@ export function buildSignalText(params: {
 
   const x12 = count1X2(lastN);
   const b = countBtts(lastN);
-  const ou = countTeamTotalOU(lastN, 2.5);
+  const ou = countTeamTotalOU(lastN, 1.5);
   const m = Math.max(x12.one, x12.x, x12.two);
   let lean: "1" | "X" | "2" = "X";
   if (m === x12.one) lean = "1";
@@ -263,7 +263,7 @@ export function buildSignalText(params: {
     `${focusTeam} · base últimos ${n} jogos`,
     ``,
     `Resultado Final: ${lean}`,
-    `Total de Gols da Equipe (${focusTeam}): ${ouLean} 2.5`,
+    `Total de Gols da Equipe (${focusTeam}): ${ouLean} 1.5`,
     `Ambos as Equipes Marcam: ${bttsLean}`,
   ];
 

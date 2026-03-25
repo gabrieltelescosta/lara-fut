@@ -42,7 +42,7 @@ function pickLineForMarket(
   }
   if (id === "teamOu" && picks.teamOu !== undefined) {
     const ou = picks.teamOu.side === "mais" ? "Mais" : "Menos";
-    return `Gols ${homeTeam} (linha 2.5) → ${ou}`;
+    return `Gols ${homeTeam} (linha 1.5) → ${ou}`;
   }
   if (id === "btts" && picks.btts !== undefined) {
     return `BTTS → ${picks.btts === "sim" ? "Sim" : "Não"}`;
